@@ -261,12 +261,12 @@ impl State {
 
         let new_name = if todos_total > 0 {
             if is_busy {
-                format!("{} ({}/{})*", base_name, todos_done, todos_total)
+                format!("{} ({}/{}) *", base_name, todos_done, todos_total)
             } else {
                 format!("{} ({}/{})", base_name, todos_done, todos_total)
             }
         } else if is_busy {
-            format!("{}*", base_name)
+            format!("{} *", base_name)
         } else {
             // No todos and idle - restore original name
             base_name.clone()
@@ -468,8 +468,8 @@ impl ZellijPlugin for State {
 fn strip_todo_suffix(name: &str) -> String {
     let trimmed = name.trim_end();
 
-    // First strip trailing asterisk if present (busy indicator)
-    let trimmed = trimmed.strip_suffix('*').unwrap_or(trimmed);
+    // First strip trailing " *" if present (busy indicator with space)
+    let trimmed = trimmed.strip_suffix(" *").unwrap_or(trimmed);
 
     // Then strip (X/Y) pattern if present
     if let Some(paren_start) = trimmed.rfind(" (") {
@@ -508,16 +508,17 @@ mod tests {
             "my-project-name"
         );
 
-        // Asterisk (busy indicator) stripping
-        assert_eq!(strip_todo_suffix("myproject*"), "myproject");
-        assert_eq!(strip_todo_suffix("myproject (4/5)*"), "myproject");
+        // Asterisk (busy indicator) stripping - now with space before asterisk
+        assert_eq!(strip_todo_suffix("myproject *"), "myproject");
+        assert_eq!(strip_todo_suffix("myproject (4/5) *"), "myproject");
         assert_eq!(
-            strip_todo_suffix("my-project-name (1/2)*"),
+            strip_todo_suffix("my-project-name (1/2) *"),
             "my-project-name"
         );
 
         // Edge cases
-        assert_eq!(strip_todo_suffix("myproject* (1/2)"), "myproject* (1/2)"); // asterisk not at end
+        assert_eq!(strip_todo_suffix("myproject* (1/2)"), "myproject* (1/2)"); // asterisk without space not stripped
         assert_eq!(strip_todo_suffix("my*project"), "my*project"); // asterisk in middle
+        assert_eq!(strip_todo_suffix("myproject*"), "myproject*"); // asterisk without space not stripped
     }
 }
