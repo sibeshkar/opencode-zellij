@@ -113,6 +113,8 @@ export function getPluginPath(config: OpenCodeZellijConfig): string {
   return `file:${cachedPath}`;
 }
 
+import type { SessionStatus } from "./types";
+
 /**
  * Message types for communication with the Zellij plugin
  */
@@ -123,6 +125,7 @@ export interface ZellijMessage {
   title?: string;
   todos_done?: number;
   todos_total?: number;
+  status?: SessionStatus;
 }
 
 /**

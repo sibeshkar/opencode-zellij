@@ -20,9 +20,12 @@ export interface OpenCodeEvent {
   [key: string]: unknown;
 }
 
+export type SessionStatus = "idle" | "busy" | "retry";
+
 export interface SessionState {
   sessionId: string;
   title: string;
   todosDone: number;
   todosTotal: number;
+  status: SessionStatus;
 }

@@ -19,6 +19,8 @@ struct OpenCodeMessage {
     todos_done: Option<u32>,
     #[serde(default)]
     todos_total: Option<u32>,
+    #[serde(default)]
+    status: Option<String>, // "idle" | "busy" | "retry"
 }
 
 /// Information about an OpenCode session in a tab
@@ -30,6 +32,7 @@ pub struct SessionInfo {
     pub title: String,
     pub todos_done: u32,
     pub todos_total: u32,
+    pub status: String, // "idle" | "busy" | "retry"
 }
 
 /// Plugin state
@@ -235,6 +238,7 @@ impl State {
         let todos_done = msg.todos_done.unwrap_or(0);
         let todos_total = msg.todos_total.unwrap_or(0);
         let title = msg.title.unwrap_or_default();
+        let status = msg.status.unwrap_or_else(|| "idle".to_string());
 
         // Update or insert session info
         let session = SessionInfo {
@@ -244,17 +248,31 @@ impl State {
             title,
             todos_done,
             todos_total,
+            status: status.clone(),
         };
         self.sessions.insert(tab_index, session);
 
         // Update sorted indices
         self.update_sorted_indices();
 
-        // Rename the tab to include todo count
-        if todos_total > 0 {
-            let new_name = format!("{} ({}/{})", base_name, todos_done, todos_total);
-            rename_tab(tab_index as u32 + 1, &new_name);
-        }
+        // Rename the tab to show status
+        // Asterisk (*) indicates busy/working, removed when idle
+        let is_busy = status == "busy" || status == "retry";
+
+        let new_name = if todos_total > 0 {
+            if is_busy {
+                format!("{} ({}/{})*", base_name, todos_done, todos_total)
+            } else {
+                format!("{} ({}/{})", base_name, todos_done, todos_total)
+            }
+        } else if is_busy {
+            format!("{}*", base_name)
+        } else {
+            // No todos and idle - restore original name
+            base_name.clone()
+        };
+
+        rename_tab(tab_index as u32 + 1, &new_name);
 
         true
     }
@@ -446,10 +464,14 @@ impl ZellijPlugin for State {
     }
 }
 
-/// Strip any existing (X/Y) todo suffix from a tab name
+/// Strip any existing (X/Y) todo suffix and/or trailing asterisk from a tab name
 fn strip_todo_suffix(name: &str) -> String {
-    // Match pattern like " (4/5)" at the end
     let trimmed = name.trim_end();
+
+    // First strip trailing asterisk if present (busy indicator)
+    let trimmed = trimmed.strip_suffix('*').unwrap_or(trimmed);
+
+    // Then strip (X/Y) pattern if present
     if let Some(paren_start) = trimmed.rfind(" (") {
         let after_paren = &trimmed[paren_start + 2..];
         if after_paren.ends_with(')') {
@@ -475,6 +497,7 @@ mod tests {
 
     #[test]
     fn test_strip_todo_suffix() {
+        // Basic todo suffix stripping
         assert_eq!(strip_todo_suffix("myproject (4/5)"), "myproject");
         assert_eq!(strip_todo_suffix("myproject (0/0)"), "myproject");
         assert_eq!(strip_todo_suffix("myproject (12/34)"), "myproject");
@@ -484,5 +507,17 @@ mod tests {
             strip_todo_suffix("my-project-name (1/2)"),
             "my-project-name"
         );
+
+        // Asterisk (busy indicator) stripping
+        assert_eq!(strip_todo_suffix("myproject*"), "myproject");
+        assert_eq!(strip_todo_suffix("myproject (4/5)*"), "myproject");
+        assert_eq!(
+            strip_todo_suffix("my-project-name (1/2)*"),
+            "my-project-name"
+        );
+
+        // Edge cases
+        assert_eq!(strip_todo_suffix("myproject* (1/2)"), "myproject* (1/2)"); // asterisk not at end
+        assert_eq!(strip_todo_suffix("my*project"), "my*project"); // asterisk in middle
     }
 }

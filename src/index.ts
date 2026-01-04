@@ -4,7 +4,7 @@ import { appendFileSync } from "fs";
 import { join } from "path";
 import { loadPluginConfig } from "./config-loader";
 import { isInZellij, getPluginPath, sendToZellij, getZellijSessionName } from "./zellij";
-import type { SessionState } from "./types";
+import type { SessionState, SessionStatus } from "./types";
 
 // Debug logging to file
 const DEBUG = false;
@@ -76,6 +76,7 @@ export const ZellijPlugin: Plugin = async ({ directory }) => {
       title: currentState.title,
       todos_done: currentState.todosDone,
       todos_total: currentState.todosTotal,
+      status: currentState.status,
     };
     debugLog("Sending update to Zellij", message);
     sendToZellij(message);
@@ -119,6 +120,7 @@ export const ZellijPlugin: Plugin = async ({ directory }) => {
           title: typeof title === "string" ? title : "",
           todosDone: 0,
           todosTotal: 0,
+          status: "idle",
         };
         sendSessionUpdate();
       }
@@ -145,6 +147,7 @@ export const ZellijPlugin: Plugin = async ({ directory }) => {
             title: lastTitle,
             todosDone: done,
             todosTotal: total,
+            status: "idle",
           };
           sendSessionUpdate();
         }
@@ -164,10 +167,25 @@ export const ZellijPlugin: Plugin = async ({ directory }) => {
         }
       }
 
-      // Handle session idle
+      // Handle session status changes (new event)
+      if (event.type === "session.status") {
+        const props = event.properties as { status?: { type: SessionStatus } };
+        const statusType = props?.status?.type;
+        debugLog("session.status handler", { statusType });
+        
+        if (statusType && currentState && currentState.status !== statusType) {
+          currentState.status = statusType;
+          sendSessionUpdate();
+        }
+      }
+
+      // Handle session idle (deprecated, backwards compatibility)
       if (event.type === "session.idle") {
         debugLog("session.idle handler");
-        // Session idle doesn't have messages in properties, title comes from session.updated
+        if (currentState && currentState.status !== "idle") {
+          currentState.status = "idle";
+          sendSessionUpdate();
+        }
       }
 
       // Handle session deleted/ended
