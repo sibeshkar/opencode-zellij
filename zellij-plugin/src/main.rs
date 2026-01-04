@@ -12,6 +12,8 @@ struct OpenCodeMessage {
     #[serde(default)]
     session_id: Option<String>,
     #[serde(default)]
+    pane_id: Option<String>,
+    #[serde(default)]
     title: Option<String>,
     #[serde(default)]
     todos_done: Option<u32>,
@@ -35,6 +37,12 @@ pub struct SessionInfo {
 struct State {
     /// Tab index -> Session info (only tabs with active OpenCode sessions)
     sessions: HashMap<usize, SessionInfo>,
+
+    /// pane_id -> tab_index mapping (looked up from PaneManifest)
+    pane_to_tab: HashMap<u32, usize>,
+
+    /// Pane manifest from PaneUpdate events (maps tab_position -> Vec<PaneInfo>)
+    pane_manifest: PaneManifest,
 
     /// All tabs from TabUpdate events
     tabs: Vec<TabInfo>,
@@ -188,7 +196,33 @@ impl State {
             }
         };
 
-        let tab_index = self.current_tab_index;
+        // Determine which tab this update belongs to:
+        // 1. If pane_id is provided, look it up in our pane_to_tab mapping
+        // 2. Otherwise fall back to current_tab_index (less reliable)
+        let tab_index = if let Some(pane_id_str) = &msg.pane_id {
+            if let Ok(pane_id) = pane_id_str.parse::<u32>() {
+                self.pane_to_tab
+                    .get(&pane_id)
+                    .copied()
+                    .unwrap_or(self.current_tab_index)
+            } else {
+                // pane_id might be in format "terminal_X", try to parse X
+                let numeric_part = pane_id_str
+                    .strip_prefix("terminal_")
+                    .and_then(|s| s.parse::<u32>().ok());
+                if let Some(pane_id) = numeric_part {
+                    self.pane_to_tab
+                        .get(&pane_id)
+                        .copied()
+                        .unwrap_or(self.current_tab_index)
+                } else {
+                    self.current_tab_index
+                }
+            }
+        } else {
+            self.current_tab_index
+        };
+
         let tab_name = self
             .tabs
             .get(tab_index)
@@ -266,6 +300,7 @@ impl ZellijPlugin for State {
         ]);
         subscribe(&[
             EventType::TabUpdate,
+            EventType::PaneUpdate,
             EventType::Key,
             EventType::Visible,
             EventType::PermissionRequestResult,
@@ -316,6 +351,21 @@ impl ZellijPlugin for State {
                         }
                     }
                 }
+                true
+            }
+
+            Event::PaneUpdate(pane_manifest) => {
+                // Build pane_id -> tab_index mapping
+                self.pane_to_tab.clear();
+                for (tab_position, panes) in &pane_manifest.panes {
+                    for pane in panes {
+                        // Only track terminal panes (not plugins)
+                        if !pane.is_plugin {
+                            self.pane_to_tab.insert(pane.id, *tab_position);
+                        }
+                    }
+                }
+                self.pane_manifest = pane_manifest;
                 true
             }
 

@@ -117,6 +117,7 @@ export function getPluginPath(config: OpenCodeZellijConfig): string {
 export interface ZellijMessage {
   type: "init" | "update" | "end" | "show" | "hide" | "toggle";
   session_id?: string;
+  pane_id?: string;
   title?: string;
   todos_done?: number;
   todos_total?: number;
@@ -144,7 +145,13 @@ export function sendToZellij(message: ZellijMessage): void {
     return;
   }
 
-  const payload = JSON.stringify(message);
+  // Add pane_id to message so the plugin knows which tab this pane belongs to
+  const messageWithPaneId: ZellijMessage = {
+    ...message,
+    pane_id: process.env.ZELLIJ_PANE_ID,
+  };
+
+  const payload = JSON.stringify(messageWithPaneId);
   debugLog("sendToZellij: spawning zellij pipe", { zellij, args: ["pipe", "--name", "opencode", "--", payload] });
 
   try {
