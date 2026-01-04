@@ -7,9 +7,16 @@ export interface TodoItem {
 
 export interface OpenCodeEvent {
   type: string;
-  todos?: TodoItem[];
-  messages?: Array<{ role: string; content: string }>;
-  session?: { id: string };
+  properties?: {
+    todos?: TodoItem[];
+    info?: {
+      id: string;
+      title?: string;
+      [key: string]: unknown;
+    };
+    sessionID?: string;
+    [key: string]: unknown;
+  };
   [key: string]: unknown;
 }
 

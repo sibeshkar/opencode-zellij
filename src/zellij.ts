@@ -1,8 +1,23 @@
 import { spawn, spawnSync } from "child_process";
-import { existsSync, mkdirSync, copyFileSync } from "fs";
+import { existsSync, mkdirSync, copyFileSync, appendFileSync } from "fs";
 import { join, dirname } from "path";
 import { fileURLToPath } from "url";
 import type { OpenCodeZellijConfig } from "./config";
+
+// Debug logging to file (same as index.ts)
+const LOG_FILE = join("/Users/sk/Maya/research/clone/worktreefafo/tmp/zellij-opencode", "debug.log");
+
+function debugLog(message: string, data?: unknown) {
+  const timestamp = new Date().toISOString();
+  const line = data 
+    ? `[${timestamp}] [zellij] ${message}: ${JSON.stringify(data)}\n`
+    : `[${timestamp}] [zellij] ${message}\n`;
+  try {
+    appendFileSync(LOG_FILE, line);
+  } catch (e) {
+    // Ignore write errors
+  }
+}
 
 // Get the directory where this module is located
 const __filename = fileURLToPath(import.meta.url);
@@ -115,18 +130,22 @@ export interface ZellijMessage {
  * The plugin must be loaded first via keybind or zellij action.
  */
 export function sendToZellij(message: ZellijMessage): void {
+  debugLog("sendToZellij called", message);
+
   if (!isInZellij()) {
-    // Silently ignore if not in Zellij
+    debugLog("sendToZellij: not in Zellij, skipping", { ZELLIJ: process.env.ZELLIJ });
     return;
   }
 
   const zellij = findZellij();
   if (!zellij) {
+    debugLog("sendToZellij: could not find zellij binary");
     console.error("[opencode-zellij] Could not find zellij binary");
     return;
   }
 
   const payload = JSON.stringify(message);
+  debugLog("sendToZellij: spawning zellij pipe", { zellij, args: ["pipe", "--name", "opencode", "--", payload] });
 
   try {
     const proc = spawn(
@@ -138,7 +157,9 @@ export function sendToZellij(message: ZellijMessage): void {
       }
     );
     proc.unref();
+    debugLog("sendToZellij: spawn successful");
   } catch (error) {
+    debugLog("sendToZellij: spawn failed", { error: String(error) });
     console.error("[opencode-zellij] Failed to send pipe message:", error);
   }
 }

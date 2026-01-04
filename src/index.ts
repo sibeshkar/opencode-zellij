@@ -1,26 +1,24 @@
 import type { Plugin } from "@opencode-ai/plugin";
+import type { Event } from "@opencode-ai/sdk";
+import { appendFileSync } from "fs";
+import { join } from "path";
 import { loadPluginConfig } from "./config-loader";
 import { isInZellij, getPluginPath, sendToZellij, getZellijSessionName } from "./zellij";
-import type { OpenCodeEvent, SessionState } from "./types";
+import type { SessionState } from "./types";
 
-export { OpenCodeZellijConfigSchema, type OpenCodeZellijConfig } from "./config";
+// Debug logging to file
+const LOG_FILE = join("/Users/sk/Maya/research/clone/worktreefafo/tmp/zellij-opencode", "debug.log");
 
-/**
- * Extract a title from the conversation messages or directory
- */
-function extractTitle(
-  messages: Array<{ role: string; content: string }> | undefined,
-  directory: string
-): string {
-  if (messages && messages.length > 0) {
-    const firstUserMsg = messages.find((m) => m.role === "user");
-    if (firstUserMsg?.content) {
-      const firstLine = firstUserMsg.content.split("\n")[0] || "";
-      const truncated = firstLine.slice(0, 30).trim();
-      return truncated || directory.split("/").pop() || "opencode";
-    }
+function debugLog(message: string, data?: unknown) {
+  const timestamp = new Date().toISOString();
+  const line = data 
+    ? `[${timestamp}] ${message}: ${JSON.stringify(data)}\n`
+    : `[${timestamp}] ${message}\n`;
+  try {
+    appendFileSync(LOG_FILE, line);
+  } catch (e) {
+    // Ignore write errors
   }
-  return directory.split("/").pop() || "opencode";
 }
 
 /**
@@ -33,15 +31,18 @@ function extractTitle(
  * 4. The Zellij plugin updates tab names and provides a session switcher
  */
 export const ZellijPlugin: Plugin = async ({ directory }) => {
+  debugLog("Plugin loading", { directory, isInZellij: isInZellij(), ZELLIJ: process.env.ZELLIJ, ZELLIJ_SESSION_NAME: process.env.ZELLIJ_SESSION_NAME });
+
   // Check if running inside Zellij
   if (!isInZellij()) {
-    // Not in Zellij, plugin is a no-op
+    debugLog("Not in Zellij, plugin is a no-op");
     return {};
   }
 
   // Load configuration
   const config = loadPluginConfig(directory);
 
+  debugLog("Plugin initialized", { config });
   console.log("[opencode-zellij] Plugin initialized in Zellij environment");
   console.log("[opencode-zellij] Config:", {
     auto_rename_tabs: config.auto_rename_tabs,
@@ -56,6 +57,7 @@ export const ZellijPlugin: Plugin = async ({ directory }) => {
   const initializeZellijPlugin = () => {
     if (initialized) return;
 
+    debugLog("Sending init message to Zellij");
     sendToZellij({
       type: "init",
     });
@@ -65,21 +67,28 @@ export const ZellijPlugin: Plugin = async ({ directory }) => {
 
   // Send session update
   const sendSessionUpdate = () => {
-    if (!currentState || !config.auto_rename_tabs) return;
+    debugLog("sendSessionUpdate called", { currentState, auto_rename_tabs: config.auto_rename_tabs });
+    if (!currentState || !config.auto_rename_tabs) {
+      debugLog("sendSessionUpdate skipped", { hasState: !!currentState, auto_rename_tabs: config.auto_rename_tabs });
+      return;
+    }
 
-    sendToZellij({
-      type: "update",
+    const message = {
+      type: "update" as const,
       session_id: currentState.sessionId,
       title: currentState.title,
       todos_done: currentState.todosDone,
       todos_total: currentState.todosTotal,
-    });
+    };
+    debugLog("Sending update to Zellij", message);
+    sendToZellij(message);
   };
 
   // Send session end
   const sendSessionEnd = () => {
     if (!currentState) return;
 
+    debugLog("Sending session end", { sessionId: currentState.sessionId });
     sendToZellij({
       type: "end",
       session_id: currentState.sessionId,
@@ -96,15 +105,21 @@ export const ZellijPlugin: Plugin = async ({ directory }) => {
   };
 
   return {
-    event: async ({ event }: { event: OpenCodeEvent }) => {
+    event: async ({ event }: { event: Event }) => {
+      // Log every event received
+      debugLog("Event received", { type: event.type, keys: Object.keys(event), event: JSON.stringify(event).slice(0, 500) });
+
       ensureInitialized();
 
       // Handle session created
       if (event.type === "session.created") {
-        const sessionId = getZellijSessionName() || event.session?.id || `session_${Date.now()}`;
+        debugLog("session.created handler", { event });
+        const props = event.properties as { info?: { id?: string; title?: string } };
+        const sessionId = getZellijSessionName() || props?.info?.id || `session_${Date.now()}`;
+        const title = props?.info?.title || "";
         currentState = {
           sessionId,
-          title: "",
+          title: typeof title === "string" ? title : "",
           todosDone: 0,
           todosTotal: 0,
         };
@@ -113,9 +128,13 @@ export const ZellijPlugin: Plugin = async ({ directory }) => {
 
       // Handle todo updates
       if (event.type === "todo.updated") {
-        const todos = event.todos || [];
+        const props = event.properties as { todos?: Array<{ status: string }> };
+        debugLog("todo.updated handler", { properties: props });
+        const todos = props?.todos || [];
+        debugLog("todos array", { todos, length: todos.length });
         const done = todos.filter((t) => t.status === "completed").length;
         const total = todos.length;
+        debugLog("todo counts", { done, total });
 
         if (currentState) {
           currentState.todosDone = done;
@@ -123,6 +142,7 @@ export const ZellijPlugin: Plugin = async ({ directory }) => {
           sendSessionUpdate();
         } else {
           // No session yet, create one
+          debugLog("Creating new session for todo update");
           currentState = {
             sessionId: getZellijSessionName() || `session_${Date.now()}`,
             title: lastTitle,
@@ -133,11 +153,12 @@ export const ZellijPlugin: Plugin = async ({ directory }) => {
         }
       }
 
-      // Handle session idle - extract title from conversation
-      if (event.type === "session.idle") {
-        const title = extractTitle(event.messages, directory);
-
-        if (title !== lastTitle) {
+      // Handle session updated - extract title
+      if (event.type === "session.updated") {
+        const props = event.properties as { info?: { title?: string } };
+        const title = props?.info?.title;
+        if (title && typeof title === "string" && title !== lastTitle) {
+          debugLog("session.updated handler - title changed", { title });
           lastTitle = title;
           if (currentState) {
             currentState.title = title;
@@ -146,14 +167,22 @@ export const ZellijPlugin: Plugin = async ({ directory }) => {
         }
       }
 
+      // Handle session idle
+      if (event.type === "session.idle") {
+        debugLog("session.idle handler");
+        // Session idle doesn't have messages in properties, title comes from session.updated
+      }
+
       // Handle session deleted/ended
       if (event.type === "session.deleted") {
+        debugLog("session.deleted handler");
         sendSessionEnd();
       }
     },
 
     // Cleanup handler
     unload: async () => {
+      debugLog("Plugin unloading");
       sendSessionEnd();
     },
   };
