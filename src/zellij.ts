@@ -5,9 +5,11 @@ import { fileURLToPath } from "url";
 import type { OpenCodeZellijConfig } from "./config";
 
 // Debug logging to file (same as index.ts)
+const DEBUG = false;
 const LOG_FILE = join("/Users/sk/Maya/research/clone/worktreefafo/tmp/zellij-opencode", "debug.log");
 
 function debugLog(message: string, data?: unknown) {
+  if (!DEBUG) return;
   const timestamp = new Date().toISOString();
   const line = data 
     ? `[${timestamp}] [zellij] ${message}: ${JSON.stringify(data)}\n`

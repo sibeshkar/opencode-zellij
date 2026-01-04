@@ -7,9 +7,11 @@ import { isInZellij, getPluginPath, sendToZellij, getZellijSessionName } from ".
 import type { SessionState } from "./types";
 
 // Debug logging to file
+const DEBUG = false;
 const LOG_FILE = join("/Users/sk/Maya/research/clone/worktreefafo/tmp/zellij-opencode", "debug.log");
 
 function debugLog(message: string, data?: unknown) {
+  if (!DEBUG) return;
   const timestamp = new Date().toISOString();
   const line = data 
     ? `[${timestamp}] ${message}: ${JSON.stringify(data)}\n`
@@ -43,10 +45,6 @@ export const ZellijPlugin: Plugin = async ({ directory }) => {
   const config = loadPluginConfig(directory);
 
   debugLog("Plugin initialized", { config });
-  console.log("[opencode-zellij] Plugin initialized in Zellij environment");
-  console.log("[opencode-zellij] Config:", {
-    auto_rename_tabs: config.auto_rename_tabs,
-  });
 
   // Session state
   let currentState: SessionState | null = null;
@@ -62,7 +60,6 @@ export const ZellijPlugin: Plugin = async ({ directory }) => {
       type: "init",
     });
     initialized = true;
-    console.log("[opencode-zellij] Sent init message to Zellij plugin");
   };
 
   // Send session update
