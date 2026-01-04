@@ -75,10 +75,17 @@ fn render_session_item(
     let current_marker = if is_current { " *" } else { "" };
     let selector = if is_selected { ">" } else { " " };
 
-    // First line: [N] tab-name *
+    // Status indicator with colors: busy = green, idle = yellow
+    let status_str = if session.status == "busy" || session.status == "retry" {
+        "\u{1b}[32m(busy)\u{1b}[0m" // Green
+    } else {
+        "\u{1b}[33m(idle)\u{1b}[0m" // Yellow
+    };
+
+    // First line: [N] tab-name (status) *
     let tab_line = format!(
-        "{} [{}] {}{}",
-        selector, number, session.tab_name, current_marker
+        "{} [{}] {} {}{}",
+        selector, number, session.tab_name, status_str, current_marker
     );
 
     // Second line: "title" (done/total)
