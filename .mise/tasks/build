@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+#MISE description="Build the project"
+set -e
+
+# Build WASM
+cd zellij-plugin
+cargo build --release
+cp target/wasm32-wasip1/release/opencode_zellij.wasm ../assets/opencode-zellij.wasm
+cd ..
+
+# Build TypeScript
+bun build ./src/index.ts --outdir dist --target bun
+
+echo "Build complete!"

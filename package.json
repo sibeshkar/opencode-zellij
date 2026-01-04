@@ -1,0 +1,55 @@
+{
+  "name": "opencode-zellij",
+  "version": "0.1.0",
+  "description": "OpenCode plugin for Zellij integration - manage sessions across tabs with todo tracking",
+  "type": "module",
+  "module": "src/index.ts",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/your-username/opencode-zellij"
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
+  "files": [
+    "dist",
+    "assets"
+  ],
+  "scripts": {
+    "build": "bun build src/index.ts --outdir dist --target node --external '@opencode-ai/plugin' --external 'zod' && tsc",
+    "build:wasm": "cd zellij-plugin && cargo build --release",
+    "build:all": "npm run build:wasm && cp zellij-plugin/target/wasm32-wasip1/release/opencode_zellij.wasm assets/opencode-zellij.wasm && npm run build",
+    "prepublishOnly": "npm run build",
+    "typecheck": "tsc --noEmit",
+    "clean": "rm -rf dist"
+  },
+  "keywords": [
+    "opencode",
+    "zellij",
+    "terminal",
+    "multiplexer",
+    "plugin",
+    "session",
+    "todo"
+  ],
+  "author": "OpenCode Contributors",
+  "license": "MIT",
+  "dependencies": {
+    "@opencode-ai/plugin": "^1.0.85",
+    "zod": "^3.23.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.5",
+    "bun-types": "latest",
+    "typescript": "^5.3.0"
+  }
+}

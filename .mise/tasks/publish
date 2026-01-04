@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+#MISE description="Publish to npm"
+#MISE depends=["build"]
+#USAGE flag "-t --tag <tag>" "Tag to publish with" default="latest"
+
+set -e
+
+echo "Publishing to npm with tag: ${usage_tag}"
+
+npm publish --access public --tag "${usage_tag}"
+
+echo "Published successfully!"

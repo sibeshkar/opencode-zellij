@@ -1,0 +1,12 @@
+[package]
+name = "opencode-zellij"
+version = "0.1.0"
+edition = "2021"
+authors = ["OpenCode Contributors"]
+description = "Zellij plugin for managing OpenCode sessions across tabs"
+license = "MIT"
+
+[dependencies]
+zellij-tile = "0.41.1"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"

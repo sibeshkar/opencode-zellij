@@ -1,0 +1,23 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "OpenCode Zellij Configuration",
+  "description": "Configuration schema for the opencode-zellij plugin",
+  "type": "object",
+  "properties": {
+    "$schema": {
+      "type": "string",
+      "description": "JSON schema reference for IDE autocompletion"
+    },
+    "auto_rename_tabs": {
+      "type": "boolean",
+      "default": true,
+      "description": "Whether to automatically rename tabs with todo progress (e.g., 'Tab (2/5)'). Set to false to disable tab renaming."
+    },
+    "plugin_path": {
+      "type": ["string", "null"],
+      "default": null,
+      "description": "Custom path to the WASM plugin. Usually not needed - the bundled plugin is used by default."
+    }
+  },
+  "additionalProperties": false
+}

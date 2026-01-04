@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+#MISE description="Setup the project"
+set -e
+
+echo "Setting up project..."
+
+# Install npm dependencies
+bun install
+
+# Install Rust target if needed
+if ! rustup target list --installed | grep -q wasm32-wasip1; then
+    echo "Adding wasm32-wasip1 target..."
+    rustup target add wasm32-wasip1
+fi
+
+echo "Setup complete!"
