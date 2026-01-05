@@ -59,7 +59,7 @@ fn render_session_list(state: &State, rows: usize, cols: usize) {
 
     // Show hints at the bottom
     println!();
-    let hints = "j/k: navigate  Enter: switch  Esc: close";
+    let hints = "j/k: navigate  Enter: switch  c: clear  D: clear all  Esc: close";
     println!("  {}", truncate(hints, cols.saturating_sub(4)));
 }
 

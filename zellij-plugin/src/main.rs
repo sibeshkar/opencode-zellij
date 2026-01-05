@@ -150,6 +150,18 @@ impl State {
                 false
             }
 
+            // Clear selected session
+            BareKey::Char('c') => {
+                self.clear_selected_session();
+                true
+            }
+
+            // Clear all sessions (Shift+D)
+            BareKey::Char('D') => {
+                self.clear_all_sessions();
+                true
+            }
+
             _ => false,
         }
     }
@@ -163,6 +175,32 @@ impl State {
                 hide_self();
             }
         }
+    }
+
+    /// Clear the currently selected session (restore tab name, remove from tracking)
+    fn clear_selected_session(&mut self) {
+        if let Some(&tab_index) = self.sorted_tab_indices.get(self.selected_index) {
+            if let Some(session) = self.sessions.remove(&tab_index) {
+                // Restore original tab name
+                rename_tab(tab_index as u32 + 1, &session.tab_name);
+            }
+            self.update_sorted_indices();
+
+            // Adjust selected index if needed
+            if self.selected_index >= self.sorted_tab_indices.len() {
+                self.selected_index = self.sorted_tab_indices.len().saturating_sub(1);
+            }
+        }
+    }
+
+    /// Clear all sessions (restore all tab names, remove all from tracking)
+    fn clear_all_sessions(&mut self) {
+        for (tab_index, session) in self.sessions.drain() {
+            // Restore original tab name
+            rename_tab(tab_index as u32 + 1, &session.tab_name);
+        }
+        self.sorted_tab_indices.clear();
+        self.selected_index = 0;
     }
 
     /// Process a pipe message from OpenCode
