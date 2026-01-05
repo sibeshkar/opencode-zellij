@@ -294,15 +294,20 @@ impl State {
         self.update_sorted_indices();
 
         // Rename the tab to show status
-        // Asterisk (*) indicates busy/working, removed when idle
+        // Asterisk (*) indicates busy/working, question mark (?) indicates waiting for permission
         let is_busy = status == "busy" || status == "retry";
+        let is_asking = status == "asking";
 
         let new_name = if todos_total > 0 {
-            if is_busy {
+            if is_asking {
+                format!("{} ({}/{})?", base_name, todos_done, todos_total)
+            } else if is_busy {
                 format!("{} ({}/{})*", base_name, todos_done, todos_total)
             } else {
                 format!("{} ({}/{})", base_name, todos_done, todos_total)
             }
+        } else if is_asking {
+            format!("{} ?", base_name)
         } else if is_busy {
             format!("{} *", base_name)
         } else {
@@ -502,13 +507,22 @@ impl ZellijPlugin for State {
     }
 }
 
-/// Strip any existing (X/Y) todo suffix and/or trailing asterisk from a tab name
+/// Strip any existing (X/Y) todo suffix and/or trailing indicator (* or ?) from a tab name
 fn strip_todo_suffix(name: &str) -> String {
     let trimmed = name.trim_end();
 
-    // Strip trailing " *" (busy indicator with space, for no-todos case)
+    // Strip trailing " ?" (asking indicator with space, for no-todos case)
+    // OR trailing "?" after ")" (asking indicator without space, for todos case)
+    // OR trailing " *" (busy indicator with space, for no-todos case)
     // OR trailing "*" after ")" (busy indicator without space, for todos case)
-    let trimmed = if let Some(stripped) = trimmed.strip_suffix(" *") {
+    let trimmed = if let Some(stripped) = trimmed.strip_suffix(" ?") {
+        stripped
+    } else if let Some(stripped) = trimmed.strip_suffix(")?") {
+        // Add back the closing paren since we need it for the (X/Y) pattern check
+        let mut s = stripped.to_string();
+        s.push(')');
+        return strip_todo_pattern(&s);
+    } else if let Some(stripped) = trimmed.strip_suffix(" *") {
         stripped
     } else if let Some(stripped) = trimmed.strip_suffix(")*") {
         // Add back the closing paren since we need it for the (X/Y) pattern check
@@ -571,9 +585,21 @@ mod tests {
             "my-project-name"
         );
 
+        // Question mark (asking indicator) stripping
+        // Case 1: " ?" at end (no todos, asking)
+        assert_eq!(strip_todo_suffix("myproject ?"), "myproject");
+
+        // Case 2: ")?" at end (with todos, asking) - no space before question mark
+        assert_eq!(strip_todo_suffix("myproject (4/5)?"), "myproject");
+        assert_eq!(
+            strip_todo_suffix("my-project-name (1/2)?"),
+            "my-project-name"
+        );
+
         // Edge cases
         assert_eq!(strip_todo_suffix("myproject* (1/2)"), "myproject* (1/2)"); // asterisk in wrong place
         assert_eq!(strip_todo_suffix("my*project"), "my*project"); // asterisk in middle
         assert_eq!(strip_todo_suffix("myproject*"), "myproject*"); // asterisk without space or paren not stripped
+        assert_eq!(strip_todo_suffix("myproject?"), "myproject?"); // question mark without space or paren not stripped
     }
 }

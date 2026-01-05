@@ -7,7 +7,7 @@ import { isInZellij, getPluginPath, sendToZellij, getZellijSessionName } from ".
 import type { SessionState, SessionStatus } from "./types";
 
 // Debug logging to file
-const DEBUG = false;
+const DEBUG = process.env.OPENCODE_ZELLIJ_DEBUG === "true" || true; // Enable by default for now
 const LOG_FILE = join("/Users/sk/Maya/research/clone/worktreefafo/tmp/zellij-opencode", "debug.log");
 
 function debugLog(message: string, data?: unknown) {
@@ -45,11 +45,19 @@ export const ZellijPlugin: Plugin = async ({ directory }) => {
   const config = loadPluginConfig(directory);
 
   debugLog("Plugin initialized", { config });
+  debugLog("Permission tracking ENABLED - will track permission.asked and permission.replied events");
 
   // Session state
   let currentState: SessionState | null = null;
   let lastTitle = "";
   let initialized = false;
+  
+  // Track pending permissions for the current session
+  let pendingPermissions: Set<string> = new Set();
+  
+  // Debug: track all event types seen
+  const seenEventTypes: Set<string> = new Set();
+  let permissionEventCount = 0;
 
   // Initialize the Zellij plugin
   const initializeZellijPlugin = () => {
@@ -78,6 +86,15 @@ export const ZellijPlugin: Plugin = async ({ directory }) => {
       todos_total: currentState.todosTotal,
       status: currentState.status,
     };
+    
+    // Extra logging for permission-related status
+    if (currentState.status === "asking") {
+      debugLog("=== SENDING ASKING STATUS TO ZELLIJ ===", { 
+        message,
+        pendingPermissions: Array.from(pendingPermissions)
+      });
+    }
+    
     debugLog("Sending update to Zellij", message);
     sendToZellij(message);
   };
@@ -93,6 +110,7 @@ export const ZellijPlugin: Plugin = async ({ directory }) => {
     });
 
     currentState = null;
+    pendingPermissions.clear();
   };
 
   // Initialize on first event (ensures Zellij plugin is running)
@@ -104,8 +122,27 @@ export const ZellijPlugin: Plugin = async ({ directory }) => {
 
   return {
     event: async ({ event }: { event: Event }) => {
-      // Log every event received
+      // Track all event types for debugging
+      if (!seenEventTypes.has(event.type)) {
+        seenEventTypes.add(event.type);
+        debugLog("NEW EVENT TYPE DISCOVERED", { type: event.type, allTypes: Array.from(seenEventTypes) });
+      }
+      
+      // Log every event received (truncated)
       debugLog("Event received", { type: event.type, keys: Object.keys(event), event: JSON.stringify(event).slice(0, 500) });
+      
+      // Special handling for permission-related events - log full details
+      if (event.type.includes("permission")) {
+        permissionEventCount++;
+        debugLog("=== PERMISSION EVENT DETECTED ===", { 
+          count: permissionEventCount,
+          type: event.type, 
+          fullEvent: event,
+          currentState: currentState,
+          pendingPermissionsSize: pendingPermissions.size,
+          pendingPermissionIds: Array.from(pendingPermissions)
+        });
+      }
 
       ensureInitialized();
 
@@ -184,7 +221,93 @@ export const ZellijPlugin: Plugin = async ({ directory }) => {
         debugLog("session.idle handler");
         if (currentState && currentState.status !== "idle") {
           currentState.status = "idle";
+          pendingPermissions.clear();
           sendSessionUpdate();
+        }
+      }
+
+      // Handle permission request - set status to "asking"
+      // Note: permission.asked is not in SDK types but is sent by OpenCode
+      if ((event as { type: string }).type === "permission.asked") {
+        const props = (event as { properties?: { id?: string; sessionID?: string } }).properties;
+        const oldStatus = currentState?.status;
+        debugLog("permission.asked handler ENTERED", { 
+          props,
+          hasId: !!props?.id,
+          currentState,
+          oldStatus,
+          pendingPermissionsBefore: Array.from(pendingPermissions)
+        });
+        
+        if (props?.id) {
+          pendingPermissions.add(props.id);
+          debugLog("Added permission to pending", { 
+            permissionId: props.id, 
+            pendingPermissionsAfter: Array.from(pendingPermissions) 
+          });
+          
+          if (!currentState) {
+            // Create a session state if we don't have one yet
+            debugLog("Creating session state for permission event");
+            currentState = {
+              sessionId: props?.sessionID || getZellijSessionName() || `session_${Date.now()}`,
+              title: lastTitle,
+              todosDone: 0,
+              todosTotal: 0,
+              status: "asking",
+            };
+            sendSessionUpdate();
+          } else if (currentState.status !== "asking") {
+            currentState.status = "asking";
+            debugLog("STATUS CHANGED TO ASKING", { oldStatus, newStatus: "asking" });
+            sendSessionUpdate();
+          } else {
+            debugLog("Status already asking, no change needed");
+          }
+        } else {
+          debugLog("WARNING: permission.asked has no id in props", { props, fullEvent: event });
+        }
+      }
+
+      // Handle permission reply - clear asking status if no more pending permissions
+      if (event.type === "permission.replied") {
+        const props = event.properties as { requestID?: string; sessionID?: string; reply?: string };
+        const oldStatus = currentState?.status;
+        debugLog("permission.replied handler ENTERED", { 
+          props,
+          hasRequestID: !!props?.requestID,
+          reply: props?.reply,
+          currentState,
+          oldStatus,
+          pendingPermissionsBefore: Array.from(pendingPermissions)
+        });
+        
+        if (props?.requestID) {
+          const hadPermission = pendingPermissions.has(props.requestID);
+          pendingPermissions.delete(props.requestID);
+          debugLog("Removed permission from pending", { 
+            permissionId: props.requestID,
+            wasTracked: hadPermission,
+            pendingPermissionsAfter: Array.from(pendingPermissions),
+            remainingCount: pendingPermissions.size
+          });
+          
+          if (pendingPermissions.size === 0 && currentState && currentState.status === "asking") {
+            // Go back to busy since we're still processing after permission granted
+            currentState.status = "busy";
+            debugLog("STATUS CHANGED FROM ASKING TO BUSY", { oldStatus: "asking", newStatus: "busy" });
+            sendSessionUpdate();
+          } else {
+            debugLog("Status not changed after permission.replied", {
+              reason: pendingPermissions.size > 0 
+                ? `Still ${pendingPermissions.size} pending permissions` 
+                : currentState?.status !== "asking" 
+                  ? `Status is ${currentState?.status}, not asking`
+                  : "No currentState"
+            });
+          }
+        } else {
+          debugLog("WARNING: permission.replied has no requestID in props", { props, fullEvent: event });
         }
       }
 

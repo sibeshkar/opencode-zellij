@@ -72,11 +72,19 @@ fn render_session_item(
     cols: usize,
 ) {
     let number = index + 1;
-    let current_marker = if is_current { " *" } else { "" };
+    // Use ? for current tab marker when session is asking for permission, otherwise *
+    let is_asking = session.status == "asking";
+    let current_marker = if is_current {
+        if is_asking { " ?" } else { " *" }
+    } else {
+        ""
+    };
     let selector = if is_selected { ">" } else { " " };
 
-    // Status indicator with colors: busy = green, idle = yellow
-    let status_str = if session.status == "busy" || session.status == "retry" {
+    // Status indicator with colors: asking = cyan, busy = green, idle = yellow
+    let status_str = if session.status == "asking" {
+        "\u{1b}[36m(permission required)\u{1b}[0m" // Cyan
+    } else if session.status == "busy" || session.status == "retry" {
         "\u{1b}[32m(busy)\u{1b}[0m" // Green
     } else {
         "\u{1b}[33m(idle)\u{1b}[0m" // Yellow

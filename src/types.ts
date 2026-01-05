@@ -20,7 +20,7 @@ export interface OpenCodeEvent {
   [key: string]: unknown;
 }
 
-export type SessionStatus = "idle" | "busy" | "retry";
+export type SessionStatus = "idle" | "busy" | "retry" | "asking";
 
 export interface SessionState {
   sessionId: string;
