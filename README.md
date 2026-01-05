@@ -2,6 +2,8 @@
 
 Manage multiple OpenCode sessions across Zellij tabs with a harpoon-style session switcher.
 
+https://github.com/user-attachments/assets/68ef0691-fcf7-4c2d-8bc0-2569dd5ee206
+
 ## Features
 
 - **Todo Progress in Tab Names**: Tab names automatically update to show todo progress and busy status (e.g., `myproject (3/5)*`)
