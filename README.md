@@ -49,7 +49,7 @@ Add to your `~/.config/zellij/config.kdl`:
 keybinds {
     shared_except "locked" {
         bind "Ctrl Shift o" {
-            LaunchOrFocusPlugin "file:/path/to/repo/assets/plugins/opencode-zellij.wasm" {
+            LaunchOrFocusPlugin "file:/path/to/repo/assets/opencode-zellij.wasm" {
                 floating true
                 move_to_focused_tab true
             }
@@ -66,7 +66,7 @@ Instead of (or in addition to) the keybind, you can auto-load the plugin when Ze
 
 ```kdl
 load_plugins {
-    "file:/path/to/repo/assets/plugins/opencode-zellij.wasm" 
+    "file:/path/to/repo/assets/opencode-zellij.wasm" 
 }
 ```
 
