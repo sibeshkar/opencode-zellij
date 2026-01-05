@@ -4,7 +4,7 @@ Manage multiple OpenCode sessions across Zellij tabs with a harpoon-style sessio
 
 ## Features
 
-- **Todo Progress in Tab Names**: Tab names automatically update to show todo progress (e.g., `myproject (3/5)`)
+- **Todo Progress in Tab Names**: Tab names automatically update to show todo progress and busy status (e.g., `myproject (3/5)*`)
 - **Session Switcher**: Floating pane to quickly switch between tabs with active OpenCode sessions
 - **Cross-Tab Navigation**: Switch to any OpenCode session from any tab
 
@@ -21,34 +21,25 @@ Manage multiple OpenCode sessions across Zellij tabs with a harpoon-style sessio
   [3] bugfix-login
      "Fix login flow" (0/2)
 
-  j/k: navigate  Enter: switch  Esc: close
+  j/k: navigate  Enter: switch  c: clear D:clear all Esc: close 
 ```
 
-## Installation
+## Installation (currently in development)
 
-### Step 1: Install the OpenCode Plugin
+### Step 1: Git Clone this repo to a folder `/path/to/repo`
+
+Run `bun install` or `npm install` in the repo folder and then run `bun build` to package it for use.
+The Zellij plugin it uses is currently committed to the repo at `assets/opencode-zellij.wasm`, can be used as is on any platform.
 
 Add to your `opencode.json`:
 
 ```json
 {
-  "plugin": ["opencode-zellij"]
+  "plugin": ["/path/to/repo"]
 }
 ```
 
-### Step 2: Copy the WASM Plugin
-
-Copy the bundled WASM plugin to your Zellij plugins directory:
-
-```bash
-# Create plugins directory if it doesn't exist
-mkdir -p ~/.config/zellij/plugins
-
-# Copy from npm package (after installing)
-cp node_modules/opencode-zellij/assets/opencode-zellij.wasm ~/.config/zellij/plugins/
-```
-
-### Step 3: Configure Keybind (Required)
+### Step 2: Configure Keybind (Required)
 
 Add to your `~/.config/zellij/config.kdl`:
 
@@ -56,7 +47,7 @@ Add to your `~/.config/zellij/config.kdl`:
 keybinds {
     shared_except "locked" {
         bind "Ctrl Shift o" {
-            LaunchOrFocusPlugin "file:~/.config/zellij/plugins/opencode-zellij.wasm" {
+            LaunchOrFocusPlugin "file:/path/to/repo/assets/plugins/opencode-zellij.wasm" {
                 floating true
                 move_to_focused_tab true
             }
@@ -73,7 +64,7 @@ Instead of (or in addition to) the keybind, you can auto-load the plugin when Ze
 
 ```kdl
 load_plugins {
-    "file:~/.config/zellij/plugins/opencode-zellij.wasm"
+    "file:/path/to/repo/assets/plugins/opencode-zellij.wasm" 
 }
 ```
 
@@ -89,22 +80,6 @@ load_plugins {
    - `Esc` / `q`: Close switcher
 
 Tab names automatically update to show todo progress as you work (e.g., `mytab (3/5)`).
-
-## Configuration
-
-Configuration file: `~/.config/opencode/opencode-zellij.json` (or `.opencode/opencode-zellij.json` per-project)
-
-```json
-{
-  "$schema": "https://raw.githubusercontent.com/your-username/opencode-zellij/main/assets/opencode-zellij.schema.json",
-
-  // Whether to auto-rename tabs with todo progress (default: true)
-  "auto_rename_tabs": true,
-
-  // Custom path to WASM plugin (default: bundled)
-  "plugin_path": null
-}
-```
 
 ### Environment Variables
 
@@ -133,7 +108,7 @@ The plugin communicates via `zellij pipe`. Available message types:
 ### Prerequisites
 
 - Rust with `wasm32-wasip1` target: `rustup target add wasm32-wasip1`
-- Bun or Node.js
+- Bun or Node.js/NPM
 - Zellij
 
 ### Setup
@@ -154,36 +129,6 @@ zellij
 
 # Load the plugin (once per session)
 zellij action start-or-reload-plugin "file:$(pwd)/assets/opencode-zellij.wasm"
-
-# Send test messages
-zellij pipe --name opencode -- '{"type":"update","session_id":"test","title":"Test","todos_done":2,"todos_total":5}'
-zellij pipe --name opencode -- '{"type":"show"}'
-zellij pipe --name opencode -- '{"type":"hide"}'
-
-# Or run the test suite
-cd tests
-bun run test-all.ts
-```
-
-### Project Structure
-
-```
-opencode-zellij/
-├── src/                    # OpenCode plugin (TypeScript)
-│   ├── index.ts            # Main plugin export
-│   ├── config.ts           # Configuration schema
-│   ├── config-loader.ts    # Config file loading
-│   ├── zellij.ts           # Zellij CLI wrapper
-│   └── types.ts            # TypeScript types
-├── zellij-plugin/          # Zellij plugin (Rust)
-│   └── src/
-│       ├── main.rs         # Plugin logic
-│       └── ui.rs           # UI rendering
-├── assets/                 # Bundled WASM binary
-├── tests/                  # Manual test scripts
-└── .github/workflows/      # CI/CD
-```
-
 ## Architecture
 
 This plugin consists of two parts:
@@ -223,30 +168,7 @@ session.deleted ► "end" ────────► remove session
                                   restore tab name
 ```
 
-## Troubleshooting
 
-### Plugin not loading
-
-1. Make sure you're running inside Zellij (`echo $ZELLIJ` should output something)
-2. Check that `opencode-zellij` is in your `opencode.json` plugins array
-3. Verify the WASM file exists at the configured path
-4. Check Zellij permissions were granted on first load
-
-### Session switcher not showing
-
-1. The keybind must use `LaunchOrFocusPlugin` with `move_to_focused_tab true`
-2. Make sure the plugin was loaded (via keybind or `load_plugins`)
-3. Check for keybind conflicts with other Zellij bindings
-
-### Tab names not updating
-
-1. Todo updates only show when there are todos (`total > 0`)
-2. Make sure `auto_rename_tabs` is not disabled
-3. Check that OpenCode is sending todo events
-
-### Session switcher switches tabs unexpectedly
-
-This happens when using `{"type":"show"}` via pipe instead of the keybind. The pipe message uses `show_self()` which always switches to the plugin's original tab. Use the `LaunchOrFocusPlugin` keybind for cross-tab access.
 
 ## License
 
