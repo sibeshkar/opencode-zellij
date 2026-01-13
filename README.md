@@ -182,3 +182,5 @@ Inspired by:
 - [harpoon](https://github.com/Nacho114/harpoon) - Zellij pane switcher
 - [zjpane](https://github.com/FuriouZz/zjpane) - Zellij pane navigation
 - [zjstatus](https://github.com/dj95/zjstatus) - Zellij status bar
+
+Not affiliated with OpenCode
